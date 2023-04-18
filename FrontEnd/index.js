@@ -5,12 +5,13 @@ let divBtnConnect = document.getElementById('fn-container');
 let mainLogin = document.getElementById('login-container');
 let mainIndex = document.getElementById('index-container');
 let topBar = document.getElementById('top-bar');
+let api = 'http://localhost:5678/api/';
 
 // ********************************* => II. Route Works */
 
 // A) Requete http fetch (appel de l'Api) :
 async function getWorks() {
-  let response = await fetch('http://localhost:5678/api/works');
+  let response = await fetch(api + 'works');
   return await response.json();
 }
 
@@ -18,6 +19,7 @@ async function getWorks() {
 async function listeWorks() {
   let work = await getWorks();
   let produit = document.getElementById('gallery');
+  produit.innerHTML = '';
 
   /* a) Affichage de la liste des works + creation de DOM*/
   work.forEach((project) => {
@@ -48,7 +50,7 @@ listeWorks();
 // A) Requete fetch + variable :
 async function getWorkByCategory() {
   // a) Création d'une variable "response" avec une requette AJAX ('fetch') + await pour permettre d'attendre la réponse (nécessaire pour une API)
-  let response = await fetch('http://localhost:5678/api/categories');
+  let response = await fetch(api + 'categories');
   // b) Création d'une variable "categories" la response en json (.json) + await pour attendre (function asynchrone)
   let categories = await response.json();
   // c) Création d'une variable 'filters" qui permet de sélectionner l'élement html avec l'id "filters"
@@ -67,24 +69,8 @@ async function getWorkByCategory() {
 
   // C) Ecouteur d'événements pour afficher tous les projets
   allProjectsBtn.addEventListener('click', async () => {
-    // a) Supression du HTML
-    produit.innerHTML = '';
-    works.forEach((project) => {
-      /* b) Creation des élements HTML : */
-      let projectContainer = document.createElement('figure');
-      let projectImg = document.createElement('img');
-      let projectLegend = document.createElement('figcaption');
-
-      /* c) Hiérarchisation des éléments html crées */
-      produit.appendChild(projectContainer);
-      projectContainer.appendChild(projectImg);
-      projectContainer.appendChild(projectLegend);
-
-      /* d) Attribution des données aux éléments crées */
-      projectImg.setAttribute('src', project.imageUrl);
-      projectImg.setAttribute('alt', project.title);
-      projectLegend.textContent = project.title;
-    });
+    // a) appel de la function listWorks
+    listeWorks();
 
     // Supression + Ajout de la class active au "click"
     let allButtons = document.querySelectorAll('.btn-filters');
@@ -123,6 +109,7 @@ async function getWorkByCategory() {
 
         projectImg.setAttribute('src', project.imageUrl);
         projectImg.setAttribute('alt', project.title);
+        projectImg.classList.add('adapt-img');
         projectLegend.textContent = project.title;
 
         produit.appendChild(projectContainer);
@@ -234,11 +221,10 @@ if (localStorage.getItem('token')) {
 // ********************************* => V. Route Post Work / Delete
 if (localStorage.getItem('token')) {
   let bearerToken = localStorage.getItem('token');
-  let worksToDelete = [];
   let allDeleteWork = [];
   // Route delete :
   async function deleteWork(workId, bearerToken) {
-    let response = await fetch(`http://localhost:5678/api/works/${workId}`, {
+    let response = await fetch(`${api}works/${workId}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -314,7 +300,6 @@ if (localStorage.getItem('token')) {
 
       // Met tous les id des works dans le tableau allDelete => voir firstPage pour supression
       allDeleteWork.push(workId);
-      console.log('=>', allDeleteWork);
 
       // Ajouter un événement click sur l'icône de suppression pour supprimer les éléments
       deleteIcone.addEventListener('click', async () => {
@@ -322,10 +307,11 @@ if (localStorage.getItem('token')) {
         let confirmation = confirm(
           'Êtes-vous sûr de vouloir supprimer ce work ?'
         );
-
-        // Demande de confirmation pour stocker dans le tableau workstoDelete les id en question
         if (confirmation) {
-          worksToDelete.push(workId);
+          await deleteWork(workId, bearerToken);
+          listeWorks();
+          filters.innerHTML = '';
+          getWorkByCategory();
           // Supprimer l'élément de travail du DOM
           popUpDivWorks.removeChild(workContainer);
         }
@@ -392,14 +378,19 @@ if (localStorage.getItem('token')) {
       if (confirmation) {
         allDeleteWork.forEach((workId) => {
           deleteWork(workId, bearerToken);
+          listeWorks();
+          popUpDivWorks.innerHTML = '';
         });
+
+        // Reactualisation des filtres
+        filters.innerHTML = '';
+        getWorkByCategory();
       }
     });
   }
 
   // D. Function Affichage Second Page PopUp :
-  async function popUpSecondPage(event) {
-    event.stopPropagation();
+  async function popUpSecondPage() {
     titlePopUp.textContent = 'Ajout photo';
 
     // Element de la div popUpDivWorks :
@@ -493,6 +484,7 @@ if (localStorage.getItem('token')) {
 
     popUpNav.insertBefore(btnReturn, popUpClose);
     popUpNav.style.justifyContent = 'space-between';
+
     // ------------------------------------------------------
     // Ajouter une image :
     btnAddPicture.addEventListener('click', function () {
@@ -556,12 +548,10 @@ if (localStorage.getItem('token')) {
       formData.append('image', fileName);
       formData.append('title', inputTitle.value);
       formData.append('category', categoryInput.value);
-      console.log(formData);
 
-      let response = await fetch(`http://localhost:5678/api/works`, {
+      let response = await fetch(api + `works`, {
         method: 'POST',
         headers: {
-          // Accept: 'application/json',
           Authorization: `Bearer ${bearerToken}`,
         },
         body: formData,
@@ -569,6 +559,11 @@ if (localStorage.getItem('token')) {
 
       // Gérez les réponses
       if (response.status === 201) {
+        listeWorks();
+        // Reactualisation des filtres
+        filters.innerHTML = '';
+        getWorkByCategory();
+
         messRoutePost.textContent = 'Votre travail a été soumis avec succès !';
       } else {
         messRoutePost.textContent =
@@ -578,12 +573,6 @@ if (localStorage.getItem('token')) {
 
     btnValid.addEventListener('click', () => {
       postWork(bearerToken);
-      // Supression des works de la base de données :
-      worksToDelete.forEach((workId) => {
-        deleteWork(workId, bearerToken);
-      });
-      // Vide la liste des works à supprimer
-      worksToDelete = [];
     });
   }
 
@@ -608,13 +597,6 @@ if (localStorage.getItem('token')) {
   // ---------------------------------------------------------------------------
   // H. Fermeture de la popUp lors du clic sur l'overlay :
   overlayDiv.addEventListener('click', () => {
-    // Supression des works de la base de données :
-    worksToDelete.forEach((workId) => {
-      deleteWork(workId, bearerToken);
-    });
-    // Vide la liste des works à supprimer
-    worksToDelete = [];
-
     popUpDiv.classList.remove('popUp');
     overlayDiv.classList.remove('overlay');
     btnReturn.remove();
